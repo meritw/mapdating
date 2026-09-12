@@ -11,6 +11,7 @@ import {
   filterMaps,
 } from "./game.js";
 import { attachMapZoom } from "./mapZoom.js";
+import { renderFlags } from "./flags.js";
 
 const app = document.querySelector("#app");
 
@@ -173,6 +174,9 @@ function renderPlay() {
           />
         </div>
         <div class="map-vignette" aria-hidden="true"></div>
+        <div class="map-meta">
+          ${renderFlags(map.countries || [])}
+        </div>
         <div class="zoom-controls">
           <button type="button" class="zoom-btn" data-zoom="in" aria-label="Zoom in" disabled>+</button>
           <button type="button" class="zoom-btn" data-zoom="out" aria-label="Zoom out" disabled>−</button>
@@ -186,6 +190,7 @@ function renderPlay() {
             ? `
           <div class="reveal-panel" role="status">
             <p class="reveal-year">${result.map.year}</p>
+            ${renderFlags(result.map.countries || [])}
             <p class="reveal-title">${escapeHtml(result.map.title)}</p>
             <p class="reveal-stats">
               You guessed <strong>${result.guess}</strong>

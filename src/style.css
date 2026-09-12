@@ -406,6 +406,65 @@ body {
   transition: opacity 0.25s ease;
 }
 
+.map-meta {
+  position: absolute;
+  z-index: 3;
+  top: 0.85rem;
+  left: 0.85rem;
+  right: 4rem;
+  max-width: calc(100% - 5rem);
+  pointer-events: none;
+}
+
+.flag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 2px;
+  border: 1px solid rgba(232, 220, 200, 0.22);
+  background: rgba(14, 18, 20, 0.72);
+  color: var(--paper);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.flag-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.flag-name {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flag-more {
+  font-weight: 700;
+  color: var(--paper-deep);
+}
+
+.reveal-panel .flag-strip {
+  margin: 0.15rem 0 0.1rem;
+}
+
+.reveal-panel .flag-chip {
+  background: rgba(26, 58, 66, 0.55);
+}
+
 .map-stage.is-ready .zoom-controls {
   opacity: 1;
   pointer-events: auto;
