@@ -33,7 +33,45 @@ const WORLD_TITLE_RE =
   /\b(world|mappemonde|mappa\s*mundi|orbis\s*terr|universalis\s*cosmo|terre\s*univers|globe|planisphere|whole\s+world|map\s+of\s+the\s+world|carte\s+du\s+monde)\b/i;
 
 const US_STATES_RE =
-  /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new\s+hampshire|new\s+jersey|new\s+mexico|new\s+york|north\s+carolina|north\s+dakota|ohio|oklahoma|oregon|pennsylvania|rhode\s+island|south\s+carolina|south\s+dakota|tennessee|texas|utah|vermont|virginia|washington|west\s+virginia|wisconsin|wyoming)\b/i;
+  /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|kentucke|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new\s+hampshire|new\s+jersey|new\s+mexico|new\s+york|north\s+carolina|north\s+dakota|ohio|oklahoma|oregon|pennsylvania|rhode\s+island|south\s+carolina|south\s+dakota|tennessee|texas|utah|vermont|virginia|washington|west\s+virginia|wisconsin|wyoming)\b/i;
+
+/** Titles that clearly depict the entire United States (not a state/region). */
+const WHOLE_US_TITLE_RE =
+  /\b(united\s+states(\s+of\s+america)?|[eé]tats?-unis)\b/i;
+
+const PARTIAL_US_TITLE_RE =
+  /\b(southern|northern|eastern|western)\s+parts?\b|\b(county|counties|city of|town of|township|atlas of|map of the state)\b|\b(new england|pacific coast|atlantic coast|gulf coast|mississippi (river|valley)|great lakes|chesapeake|railroad map of .{0,40}(county|city))\b/i;
+
+function isWholeUnitedStatesMap(title, subjects = []) {
+  if (!WHOLE_US_TITLE_RE.test(title)) return false;
+  if (PARTIAL_US_TITLE_RE.test(title)) return false;
+
+  // Reject state- or territory-first titles that only mention the U.S. in passing
+  const stateMatch = title.match(US_STATES_RE);
+  if (stateMatch) {
+    const lower = title.toLowerCase();
+    const statePos = lower.indexOf(stateMatch[0].toLowerCase());
+    const usPos = lower.search(/united\s+states|[eé]tats?-unis/);
+    if (statePos >= 0 && (usPos < 0 || statePos < usPos)) return false;
+  }
+
+  const subj = subjects.map((s) => String(s).toLowerCase());
+  const hasStateSubject = subj.some(
+    (s) =>
+      US_STATES_RE.test(s) &&
+      !s.includes("united states") &&
+      !s.includes("north america"),
+  );
+  const hasNationalSubject = subj.some(
+    (s) =>
+      s === "united states" ||
+      s === "united states--maps" ||
+      s.startsWith("united states--"),
+  );
+  if (hasStateSubject && !hasNationalSubject) return false;
+
+  return true;
+}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -98,13 +136,14 @@ function classifyScope(item, preferred) {
 
   if (isWorld) return "world";
 
-  const isUsa =
-    preferred === "usa" ||
-    locations.includes("united states") ||
-    subjects.some((s) => s.includes("united states")) ||
-    US_STATES_RE.test(title);
+  // USA scope = maps of the entire United States only
+  if (isWholeUnitedStatesMap(title, subjects) || preferred === "usa") {
+    if (preferred === "usa" && !isWholeUnitedStatesMap(title, subjects)) {
+      return "other";
+    }
+    if (isWholeUnitedStatesMap(title, subjects)) return "usa";
+  }
 
-  if (isUsa) return "usa";
   return "other";
 }
 
@@ -247,13 +286,25 @@ async function harvest() {
     2,
   );
 
-  const usa = await fetchAllPages(
+  const usaA = await fetchAllPages(
     (dates) => ({
       dates,
-      fa: "location:united states|online-format:image",
+      q: '"map of the united states"',
+      fa: "online-format:image",
     }),
     "usa",
     "usa",
+    3,
+  );
+
+  const usaB = await fetchAllPages(
+    (dates) => ({
+      dates,
+      q: '"united states of america"',
+      fa: "online-format:image",
+    }),
+    "usa",
+    "usa-usa",
     2,
   );
 
@@ -269,7 +320,8 @@ async function harvest() {
 
   const byId = new Map();
   for (const m of other) byId.set(m.id, m);
-  for (const m of usa) byId.set(m.id, m);
+  for (const m of usaA) byId.set(m.id, m);
+  for (const m of usaB) byId.set(m.id, m);
   for (const m of worldA) byId.set(m.id, m);
   for (const m of worldB) byId.set(m.id, m);
 

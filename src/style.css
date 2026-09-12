@@ -280,12 +280,15 @@ body {
 .screen-play {
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
+  height: 100dvh;
   background: #0a0c0d;
 }
 
 .map-stage {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   background: #0a0c0d;
 }
 
@@ -393,8 +396,8 @@ body {
 .zoom-controls {
   position: absolute;
   z-index: 3;
-  top: 3.25rem;
-  right: 1rem;
+  top: 0.85rem;
+  right: 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -449,8 +452,8 @@ body {
   pointer-events: none;
   z-index: 1;
   background:
-    linear-gradient(180deg, rgba(10, 12, 13, 0.75) 0%, transparent 18%, transparent 62%, rgba(10, 12, 13, 0.88) 100%),
-    radial-gradient(ellipse at center, transparent 40%, rgba(10, 12, 13, 0.45) 100%);
+    linear-gradient(180deg, rgba(10, 12, 13, 0.35) 0%, transparent 12%),
+    linear-gradient(0deg, rgba(10, 12, 13, 0.2) 0%, transparent 10%);
 }
 
 .btn-primary:disabled {
@@ -468,14 +471,15 @@ body {
 .chrome-top {
   position: relative;
   z-index: 4;
+  flex: 0 0 auto;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1rem 1.25rem 0.5rem;
+  padding: 0.85rem 1.25rem;
   font-size: 0.9rem;
   color: var(--paper);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  background: #0a0c0d;
 }
 
 .brand-mini {
@@ -492,14 +496,16 @@ body {
 }
 
 .chrome-bottom {
-  position: absolute;
+  position: relative;
   z-index: 4;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent, var(--chrome) 28%);
-  backdrop-filter: blur(6px);
+  flex: 0 0 auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  padding: 0.85rem 1.25rem calc(0.85rem + env(safe-area-inset-bottom));
+  background: #121518;
+  border-top: 1px solid rgba(232, 220, 200, 0.12);
+  backdrop-filter: none;
 }
 
 .guess-panel,
@@ -638,11 +644,11 @@ body {
 
 @media (min-width: 720px) {
   .chrome-top {
-    padding: 1.25rem 1.75rem 0.75rem;
+    padding: 0.9rem 1.75rem;
   }
 
   .chrome-bottom {
-    padding: 1.5rem 1.75rem 1.75rem;
+    padding: 1rem 1.75rem calc(1rem + env(safe-area-inset-bottom));
   }
 
   .guess-panel .btn,

@@ -24,7 +24,7 @@ const SCOPE_OPTIONS = [
   {
     id: "usa",
     label: "USA maps",
-    hint: "United States only",
+    hint: "The entire United States",
   },
   {
     id: "world",
@@ -151,6 +151,12 @@ function renderPlay() {
 
   const root = el(`
     <div class="screen screen-play ${revealing ? "is-reveal" : ""}">
+      <header class="chrome-top">
+        <span class="brand-mini">Mapdating</span>
+        <span class="round-meta">Round ${session.roundIndex + 1} / ${session.deck.length}</span>
+        <span class="score-meta">${session.totalScore.toLocaleString()} pts</span>
+      </header>
+
       <div class="map-stage is-loading">
         <div class="map-loading" role="status" aria-live="polite">
           <div class="map-loading-spinner" aria-hidden="true"></div>
@@ -160,10 +166,10 @@ function renderPlay() {
         <div class="map-viewport" tabindex="0" aria-label="Map. Scroll or pinch to zoom, drag to pan.">
           <img
             class="map-image"
-            src="${map.imageUrl}"
             alt="Historical map to date"
             decoding="async"
             draggable="false"
+            referrerpolicy="no-referrer"
           />
         </div>
         <div class="map-vignette" aria-hidden="true"></div>
@@ -173,12 +179,6 @@ function renderPlay() {
           <button type="button" class="zoom-btn zoom-btn-text" data-zoom="reset" aria-label="Reset zoom" disabled>Reset</button>
         </div>
       </div>
-
-      <header class="chrome-top">
-        <span class="brand-mini">Mapdating</span>
-        <span class="round-meta">Round ${session.roundIndex + 1} / ${session.deck.length}</span>
-        <span class="score-meta">${session.totalScore.toLocaleString()} pts</span>
-      </header>
 
       <footer class="chrome-bottom">
         ${
@@ -240,7 +240,24 @@ function renderPlay() {
     if (!zoom) zoom = attachMapZoom(viewport, img);
   };
 
+  let autoRetried = false;
+
+  const showLoadingUi = () => {
+    stage.classList.remove("is-error", "is-ready");
+    stage.classList.add("is-loading");
+    const loading = stage.querySelector(".map-loading");
+    if (loading && !loading.querySelector(".map-loading-spinner")) {
+      loading.innerHTML = `
+        <div class="map-loading-spinner" aria-hidden="true"></div>
+        <p class="map-loading-title">Unrolling the map…</p>
+        <p class="map-loading-hint">Large archive images can take a moment</p>
+      `;
+    }
+    if (guessBtn) guessBtn.disabled = true;
+  };
+
   const markLoaded = () => {
+    if (!img.naturalWidth) return;
     img.classList.add("is-loaded");
     stage.classList.remove("is-loading", "is-error");
     stage.classList.add("is-ready");
@@ -248,34 +265,50 @@ function renderPlay() {
     enableZoom();
   };
 
-  const markError = () => {
+  const showErrorUi = () => {
     stage.classList.remove("is-loading");
     stage.classList.add("is-error");
     const loading = stage.querySelector(".map-loading");
     if (loading) {
       loading.innerHTML = `
         <p class="map-loading-title">Couldn’t load this map</p>
-        <p class="map-loading-hint">Check your connection, then try the next round</p>
+        <p class="map-loading-hint">Archive images sometimes flake — try again</p>
         <button type="button" class="btn btn-primary btn-compact" data-action="retry-map">Retry</button>
       `;
       loading.querySelector('[data-action="retry-map"]')?.addEventListener("click", () => {
-        stage.classList.remove("is-error");
-        stage.classList.add("is-loading");
-        loading.innerHTML = `
-          <div class="map-loading-spinner" aria-hidden="true"></div>
-          <p class="map-loading-title">Unrolling the map…</p>
-          <p class="map-loading-hint">Large archive images can take a moment</p>
-        `;
-        img.src = `${map.imageUrl}${map.imageUrl.includes("?") ? "&" : "?"}_=${Date.now()}`;
+        autoRetried = false;
+        const fallback = map.imageUrl.includes("pct:25")
+          ? map.imageUrl.replace("pct:25", "pct:12.5")
+          : map.imageUrl;
+        loadMap(`${fallback}${fallback.includes("?") ? "&" : "?"}_=${Date.now()}`);
       });
     }
     if (guessBtn) guessBtn.disabled = true;
   };
 
+  const loadMap = (url) => {
+    showLoadingUi();
+    img.classList.remove("is-loaded");
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+    // Cached success may not fire load again
+    if (img.complete && img.naturalWidth > 0) markLoaded();
+  };
+
   img.addEventListener("load", markLoaded);
-  img.addEventListener("error", markError);
-  if (img.complete && img.naturalWidth > 0) markLoaded();
-  else if (img.complete) markError();
+  img.addEventListener("error", () => {
+    if (img.naturalWidth > 0) return;
+    if (!autoRetried) {
+      autoRetried = true;
+      const fallback = map.imageUrl.includes("pct:25")
+        ? map.imageUrl.replace("pct:25", "pct:12.5")
+        : map.imageUrl;
+      loadMap(`${fallback}${fallback.includes("?") ? "&" : "?"}_=${Date.now()}`);
+      return;
+    }
+    showErrorUi();
+  });
+  loadMap(map.imageUrl);
 
   root.querySelector('[data-zoom="in"]').addEventListener("click", () => zoom?.zoomIn());
   root.querySelector('[data-zoom="out"]').addEventListener("click", () => zoom?.zoomOut());
