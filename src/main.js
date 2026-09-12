@@ -200,10 +200,20 @@ function renderPlay() {
         `
             : `
           <div class="guess-panel">
-            <label class="year-readout" for="year-slider">
-              <span class="year-label">Your guess</span>
-              <span class="year-value" data-year>${guessYear}</span>
-            </label>
+            <div class="year-readout">
+              <label class="year-label" for="year-input">Your guess</label>
+              <input
+                id="year-input"
+                class="year-value year-input"
+                type="number"
+                inputmode="numeric"
+                min="${YEAR_MIN}"
+                max="${YEAR_MAX}"
+                step="1"
+                value="${guessYear}"
+                aria-label="Guess year"
+              />
+            </div>
             <input
               id="year-slider"
               class="year-slider"
@@ -212,6 +222,7 @@ function renderPlay() {
               max="${YEAR_MAX}"
               step="1"
               value="${guessYear}"
+              aria-label="Year slider"
             />
             <div class="slider-ends" aria-hidden="true">
               <span>${YEAR_MIN}</span>
@@ -316,20 +327,57 @@ function renderPlay() {
 
   if (!revealing) {
     const slider = root.querySelector("#year-slider");
-    const yearEl = root.querySelector("[data-year]");
+    const yearInput = root.querySelector("#year-input");
+
+    const clampYear = (value) => {
+      const n = Number.parseInt(String(value), 10);
+      if (!Number.isFinite(n)) return guessYear;
+      return Math.min(YEAR_MAX, Math.max(YEAR_MIN, n));
+    };
+
+    const setYear = (value) => {
+      guessYear = clampYear(value);
+      slider.value = String(guessYear);
+      yearInput.value = String(guessYear);
+      yearInput.classList.remove("tick");
+      void yearInput.offsetWidth;
+      yearInput.classList.add("tick");
+    };
+
     slider.addEventListener("input", () => {
-      guessYear = Number(slider.value);
-      yearEl.textContent = String(guessYear);
-      yearEl.classList.remove("tick");
-      void yearEl.offsetWidth;
-      yearEl.classList.add("tick");
+      setYear(slider.value);
     });
-    guessBtn.addEventListener("click", () => {
+
+    yearInput.addEventListener("input", () => {
+      if (yearInput.value === "" || yearInput.value === "-") return;
+      const n = Number.parseInt(yearInput.value, 10);
+      if (!Number.isFinite(n)) return;
+      // Live-sync slider while typing; clamp on blur/submit
+      if (n >= YEAR_MIN && n <= YEAR_MAX) {
+        guessYear = n;
+        slider.value = String(n);
+      }
+    });
+
+    yearInput.addEventListener("change", () => setYear(yearInput.value));
+    yearInput.addEventListener("blur", () => setYear(yearInput.value));
+
+    const submit = () => {
       if (guessBtn.disabled) return;
+      setYear(yearInput.value || slider.value);
       zoom?.destroy();
       session = submitGuess(session, guessYear);
       render();
+    };
+
+    yearInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
     });
+
+    guessBtn.addEventListener("click", submit);
   } else {
     root.querySelector('[data-action="next"]').addEventListener("click", () => {
       zoom?.destroy();

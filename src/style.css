@@ -541,6 +541,31 @@ body {
   color: var(--paper);
 }
 
+.year-input {
+  width: 7.5rem;
+  margin: 0;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid rgba(232, 220, 200, 0.28);
+  border-radius: 2px;
+  background: rgba(14, 18, 20, 0.55);
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  -moz-appearance: textfield;
+}
+
+.year-input::-webkit-outer-spin-button,
+.year-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.year-input:hover,
+.year-input:focus {
+  border-color: rgba(232, 220, 200, 0.55);
+  background: rgba(26, 58, 66, 0.55);
+}
+
 .year-value.tick {
   animation: tick 0.18s ease-out;
 }
