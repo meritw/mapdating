@@ -12,6 +12,12 @@ import {
 } from "./game.js";
 import { attachMapZoom } from "./mapZoom.js";
 import { renderFlags } from "./flags.js";
+import {
+  fetchLeaderboard,
+  submitScore,
+  getSavedName,
+  saveName,
+} from "./leaderboard.js";
 
 const app = document.querySelector("#app");
 
@@ -20,6 +26,14 @@ let session = null;
 let guessYear = 1750;
 /** @type {"any"|"usa"|"world"} */
 let selectedScope = "any";
+/** @type {"home"|"board"} */
+let screen = "home";
+/** @type {"usa"|"world"|"any"} */
+let boardScope = "any";
+/** @type {"today"|"week"|"all"} */
+let boardPeriod = "all";
+let scoreSubmitted = false;
+let submitMessage = "";
 
 const SCOPE_OPTIONS = [
   {
@@ -39,6 +53,18 @@ const SCOPE_OPTIONS = [
   },
 ];
 
+const SCOPE_TAB_LABELS = {
+  usa: "USA",
+  world: "World",
+  any: "Any",
+};
+
+const PERIOD_TABS = [
+  { id: "today", label: "Top Today" },
+  { id: "week", label: "Top This Week" },
+  { id: "all", label: "Top All Time" },
+];
+
 function poolCount(scope) {
   return filterMaps(maps, scope).length;
 }
@@ -51,15 +77,19 @@ function el(html) {
 
 function render() {
   app.replaceChildren();
-  if (!session) {
-    app.append(renderStart());
-    return;
-  }
-  if (session.phase === "done") {
+  if (session && session.phase === "done") {
     app.append(renderEnd());
     return;
   }
-  app.append(renderPlay());
+  if (session) {
+    app.append(renderPlay());
+    return;
+  }
+  if (screen === "board") {
+    app.append(renderBoardScreen());
+    return;
+  }
+  app.append(renderStart());
 }
 
 function startGame() {
@@ -67,7 +97,147 @@ function startGame() {
   if (pool.length < 1) return;
   session = createSession(maps, selectedScope);
   guessYear = 1750;
+  scoreSubmitted = false;
+  submitMessage = "";
+  screen = "home";
   render();
+}
+
+function openBoard(scope = selectedScope) {
+  boardScope = scope;
+  boardPeriod = "all";
+  screen = "board";
+  session = null;
+  render();
+}
+
+function formatWhen(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {{
+ *   scope: "usa"|"world"|"any",
+ *   period: "today"|"week"|"all",
+ *   onScope: (scope: "usa"|"world"|"any") => void,
+ *   onPeriod: (period: "today"|"week"|"all") => void,
+ * }} opts
+ */
+function mountBoard(host, opts) {
+  const scopeTabs = ["usa", "world", "any"]
+    .map(
+      (id) => `
+      <button type="button" class="board-tab ${opts.scope === id ? "is-active" : ""}" data-scope="${id}">
+        ${SCOPE_TAB_LABELS[id]}
+      </button>`,
+    )
+    .join("");
+  const periodTabs = PERIOD_TABS.map(
+    (tab) => `
+      <button type="button" class="board-tab board-tab-period ${opts.period === tab.id ? "is-active" : ""}" data-period="${tab.id}">
+        ${tab.label}
+      </button>`,
+  ).join("");
+
+  host.replaceChildren(
+    el(`
+      <div class="board-panel">
+        <div class="board-tabs" role="tablist" aria-label="Map set">
+          ${scopeTabs}
+        </div>
+        <div class="board-tabs board-tabs-period" role="tablist" aria-label="Time period">
+          ${periodTabs}
+        </div>
+        <div class="board-list" role="list" aria-live="polite">
+          <p class="board-status">Loading…</p>
+        </div>
+      </div>
+    `),
+  );
+
+  const panel = host.firstElementChild;
+  const list = panel.querySelector(".board-list");
+  panel.querySelectorAll("[data-scope]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      opts.onScope(/** @type {"usa"|"world"|"any"} */ (btn.getAttribute("data-scope")));
+    });
+  });
+  panel.querySelectorAll("[data-period]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      opts.onPeriod(/** @type {"today"|"week"|"all"} */ (btn.getAttribute("data-period")));
+    });
+  });
+
+  const reqScope = opts.scope;
+  const reqPeriod = opts.period;
+  fetchLeaderboard(reqScope, reqPeriod)
+    .then((data) => {
+      if (boardScope !== reqScope || boardPeriod !== reqPeriod) return;
+      const scores = data.scores || [];
+      if (!scores.length) {
+        list.innerHTML = `<p class="board-status">No scores yet — be the first.</p>`;
+        return;
+      }
+      list.innerHTML = scores
+        .map(
+          (row, i) => `
+          <div class="board-row" role="listitem">
+            <span class="board-rank">${i + 1}</span>
+            <span class="board-name">${escapeHtml(row.name)}</span>
+            <span class="board-score">${Number(row.score).toLocaleString()}</span>
+            <time class="board-when" datetime="${escapeHtml(row.createdAt)}">${escapeHtml(formatWhen(row.createdAt))}</time>
+          </div>`,
+        )
+        .join("");
+    })
+    .catch((err) => {
+      if (boardScope !== reqScope || boardPeriod !== reqPeriod) return;
+      list.innerHTML = `<p class="board-status is-error">${escapeHtml(err.message || "Could not load")}</p>`;
+    });
+}
+
+function renderBoardScreen() {
+  const root = el(`
+    <div class="screen screen-board">
+      <div class="start-atmosphere" aria-hidden="true"></div>
+      <div class="board-shell">
+        <p class="eyebrow">Standings</p>
+        <h1 class="brand">Leaderboard</h1>
+        <p class="tagline">Top 100 by map set — browse anytime.</p>
+        <div class="board-host"></div>
+        <button type="button" class="btn btn-ghost" data-action="back">Back</button>
+      </div>
+    </div>
+  `);
+  const host = root.querySelector(".board-host");
+  const refresh = () => {
+    mountBoard(host, {
+      scope: boardScope,
+      period: boardPeriod,
+      onScope: (scope) => {
+        boardScope = scope;
+        refresh();
+      },
+      onPeriod: (period) => {
+        boardPeriod = period;
+        refresh();
+      },
+    });
+  };
+  refresh();
+  root.querySelector('[data-action="back"]').addEventListener("click", () => {
+    screen = "home";
+    render();
+  });
+  return root;
 }
 
 function renderStart() {
@@ -101,7 +271,10 @@ function renderStart() {
             ${optionsHtml}
           </div>
         </fieldset>
-        <button type="button" class="btn btn-primary" data-action="start" ${canPlay ? "" : "disabled"}>Play</button>
+        <div class="start-actions">
+          <button type="button" class="btn btn-primary" data-action="start" ${canPlay ? "" : "disabled"}>Play</button>
+          <button type="button" class="btn btn-ghost" data-action="leaderboard">Leaderboard</button>
+        </div>
         <p class="meta">${ROUNDS} rounds</p>
       </div>
     </div>
@@ -118,28 +291,122 @@ function renderStart() {
   root.querySelector('[data-action="start"]').addEventListener("click", () => {
     startGame();
   });
+  root.querySelector('[data-action="leaderboard"]').addEventListener("click", () => {
+    openBoard(selectedScope);
+  });
   return root;
 }
 
 function renderEnd() {
+  const saved = escapeHtml(getSavedName());
+  const scopeLabel = SCOPE_TAB_LABELS[session.scope] || session.scope;
+  boardScope = session.scope;
+
   const root = el(`
     <div class="screen screen-end">
       <div class="start-atmosphere" aria-hidden="true"></div>
-      <div class="start-content">
-        <p class="eyebrow">Session complete</p>
-        <h1 class="brand">Mapdating</h1>
-        <p class="final-score">${session.totalScore.toLocaleString()}</p>
-        <p class="tagline">points across ${session.deck.length} maps</p>
-        <button type="button" class="btn btn-primary" data-action="again">Play again</button>
-        <button type="button" class="btn btn-ghost" data-action="settings">Change map set</button>
+      <div class="end-layout">
+        <div class="start-content end-score-block">
+          <p class="eyebrow">Session complete</p>
+          <h1 class="brand">Mapdating</h1>
+          <p class="final-score">${session.totalScore.toLocaleString()}</p>
+          <p class="tagline">points across ${session.deck.length} maps · ${scopeLabel}</p>
+          ${
+            scoreSubmitted
+              ? `<p class="submit-status is-ok">${escapeHtml(submitMessage || "Score submitted!")}</p>`
+              : `
+            <form class="name-form" data-form="score">
+              <label class="name-label" for="player-name">Your name</label>
+              <div class="name-row">
+                <input
+                  id="player-name"
+                  class="name-input"
+                  type="text"
+                  maxlength="24"
+                  autocomplete="nickname"
+                  placeholder="Cartographer"
+                  value="${saved}"
+                  required
+                />
+                <button type="submit" class="btn btn-primary" data-action="submit-score">Submit score</button>
+              </div>
+              <p class="submit-status" data-role="status" hidden></p>
+            </form>
+          `
+          }
+          <div class="end-actions">
+            <button type="button" class="btn btn-primary" data-action="again">Play again</button>
+            <button type="button" class="btn btn-ghost" data-action="settings">Change map set</button>
+          </div>
+        </div>
+        <div class="board-host end-board"></div>
       </div>
     </div>
   `);
+
+  const host = root.querySelector(".board-host");
+  const refresh = () => {
+    mountBoard(host, {
+      scope: boardScope,
+      period: boardPeriod,
+      onScope: (scope) => {
+        boardScope = scope;
+        refresh();
+      },
+      onPeriod: (period) => {
+        boardPeriod = period;
+        refresh();
+      },
+    });
+  };
+  refresh();
+
+  const form = root.querySelector('[data-form="score"]');
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = /** @type {HTMLInputElement} */ (root.querySelector("#player-name"));
+      const statusEl = root.querySelector('[data-role="status"]');
+      const btn = /** @type {HTMLButtonElement} */ (root.querySelector('[data-action="submit-score"]'));
+      const name = input.value.trim();
+      if (!name) {
+        statusEl.hidden = false;
+        statusEl.textContent = "Enter a name to submit.";
+        statusEl.classList.add("is-error");
+        return;
+      }
+      btn.disabled = true;
+      statusEl.hidden = false;
+      statusEl.classList.remove("is-error", "is-ok");
+      statusEl.textContent = "Submitting…";
+      try {
+        await submitScore({
+          name,
+          score: session.totalScore,
+          scope: session.scope,
+        });
+        saveName(name);
+        scoreSubmitted = true;
+        submitMessage = "Score submitted!";
+        boardScope = session.scope;
+        boardPeriod = "all";
+        render();
+      } catch (err) {
+        statusEl.classList.add("is-error");
+        statusEl.textContent = err.message || "Submit failed";
+        btn.disabled = false;
+      }
+    });
+  }
+
   root.querySelector('[data-action="again"]').addEventListener("click", () => {
     startGame();
   });
   root.querySelector('[data-action="settings"]').addEventListener("click", () => {
     session = null;
+    scoreSubmitted = false;
+    submitMessage = "";
+    screen = "home";
     render();
   });
   return root;
