@@ -10,6 +10,10 @@
     "fetch-maps": "node scripts/fetch-maps.mjs"
   },
   "devDependencies": {
+    "dotenv": "^17.4.2",
     "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
   }
 }
